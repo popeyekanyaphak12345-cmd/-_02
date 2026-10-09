@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X-Ray Fraction Scanner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 5px rgba(34, 197, 94, 0.7), 0 0 10px rgba(34, 197, 94, 0.5);
+        }
+
+        .neon-border {
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.5), inset 0 0 10px rgba(34, 197, 94, 0.5);
+            border: 1px solid #22c55e;
+        }
+
+        .fraction-box {
+            width: 150px;
+            height: 150px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            background-color: white;
+            transition: all 1s ease-in-out;
+        }
+
+        @media (max-width: 640px) {
+            .fraction-box {
+                width: 100px;
+                height: 100px;
+            }
+        }
+
+        /* จำลองการซ้อนทับแผ่นใส */
+        .blend-multiply {
+            mix-blend-mode: multiply;
+        }
+
+        .fraction-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+        }
+
+        .grid-cell {
+            border: 1px solid rgba(0, 0, 0, 0.3);
+        }
+
+        .fill-red { background-color: rgba(239, 68, 68, 0.6); } /* Red 500 with opacity */
+        .fill-blue { background-color: rgba(59, 130, 246, 0.6); } /* Blue 500 with opacity */
+
+        /* Animations */
+        @keyframes scanLine {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .scanner-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #22c55e;
+            box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e;
+            animation: scanLine 2s linear infinite;
+            display: none;
+            z-index: 10;
+        }
+
+        /* Message Box Animation */
+        .msg-enter {
+            animation: slideInDown 0.3s ease-out forwards;
+        }
+        @keyframes slideInDown {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Custom Input for Fractions */
+        .frac-input {
+            width: 50px;
+            text-align: center;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid #475569;
+            border-radius: 4px;
+            color: white;
+            font-size: 1.25rem;
+        }
+        .frac-input:focus {
+            outline: none;
+            border-color: #22c55e;
+            box-shadow: 0 0 5px #22c55e;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
+
+    <header class="p-4 bg-slate-900/90 border-b border-green-500/30 sticky top-0 z-50 flex justify-between items-center shadow-lg">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-radar text-green-500 animate-pulse text-2xl"></i>
+            <h1 class="text-xl md:text-2xl font-bold text-green-400 neon-text tracking-wide">X-RAY FRACTION</h1>
+        </div>
+        <div class="flex gap-4">
+            <div class="bg-slate-800 px-3 py-1 rounded-full border border-slate-700 flex items-center gap-2">
+                <i class="fa-solid fa-star text-yellow-400"></i>
+                <span id="scoreDisplay" class="font-mono text-lg font-bold">0</span>
+            </div>
+            <div class="bg-slate-800 px-3 py-1 rounded-full border border-slate-700 flex items-center gap-2 hidden md:flex">
+                <i class="fa-solid fa-layer-group text-blue-400"></i>
+                <span id="levelDisplay" class="font-mono text-sm">ภารกิจที่ 1/5</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col items-center justify-center p-4 w-full max-w-4xl mx-auto relative">
+        
+        <!-- Screen 1: Briefing (Start Screen) -->
+        <div id="briefingScreen" class="w-full bg-slate-800/80 p-6 md:p-10 rounded-2xl border border-slate-600 shadow-2xl backdrop-blur-sm text-center">
+            <i class="fa-solid fa-user-secret text-6xl text-slate-400 mb-4"></i>
+            <h2 class="text-3xl font-bold text-white mb-2">ยินดีต้อนรับ สายลับ ป.5</h2>
+            <p class="text-slate-300 mb-6 max-w-lg mx-auto text-lg">
+                แฮกเกอร์ตัวร้ายได้ขโมยรหัสผ่านไป และทิ้งสมการเศษส่วนแบบผิดๆ ไว้หลอกพวกเรา (เช่น เอาตัวส่วนมาบวกกันตรงๆ)! <br><br>
+                ภารกิจของคุณคือใช้ <span class="text-green-400 font-bold">เครื่องสแกน X-Ray (ซ้อนแผ่นใส)</span> เพื่อหา "ตัวส่วนร่วม" ที่แท้จริง และถอดรหัสความจริงออกมา!
+            </p>
+            <button onclick="startGame()" class="px-8 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-xl transition-all shadow-[0_0_15px_rgba(34,197,94,0.5)] transform hover:scale-105 active:scale-95">
+                <i class="fa-solid fa-power-off mr-2"></i> เริ่มภารกิจ
+            </button>
+        </div>
+
+        <!-- Screen 2: Game Area -->
+        <div id="gameScreen" class="w-full hidden flex-col items-center">
+            
+            <!-- Mission Top Bar -->
+            <div class="w-full bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 flex flex-col md:flex-row justify-between items-center gap-4 shadow-lg">
+                <div class="text-center md:text-left">
+                    <p class="text-xs text-red-400 font-bold tracking-wider uppercase mb-1">คำลวงของแฮกเกอร์</p>
+                    <div class="text-2xl font-mono text-slate-300 bg-black/50 px-4 py-2 rounded border border-red-500/30 line-through decoration-red-500 decoration-2" id="hackerEquation">
+                        1/2 + 1/3 = 2/5
+                    </div>
+                </div>
+                <div class="text-center">
+                    <p class="text-xs text-green-400 font-bold tracking-wider uppercase mb-1">สิ่งที่คุณต้องพิสูจน์</p>
+                    <div class="text-3xl font-mono font-bold text-white flex items-center gap-3" id="realEquation">
+                        <!-- Filled by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Area (The Core Aha! Moment) -->
+            <div class="w-full max-w-3xl bg-slate-900 rounded-2xl border border-slate-700 p-8 flex flex-col items-center relative overflow-hidden">
+                <p class="text-slate-400 text-sm mb-6 text-center">จำลองการทำงาน: เครื่องสแกนกำลังทำงาน... โปรดรอการรวมร่าง</p>
+                
+                <div class="flex items-center justify-center gap-4 md:gap-12 w-full h-[200px] relative" id="scannerArea">
+                    
+                    <!-- Fraction 1 (Vertical - Red) -->
+                    <div id="frac1-container" class="flex flex-col items-center z-10 transition-transform duration-1000">
+                        <div class="text-xl font-bold mb-2 font-mono text-red-400" id="frac1-label">1/2</div>
+                        <div id="frac1-box" class="fraction-box blend-multiply shadow-[0_0_15px_rgba(239,68,68,0.3)]">
+                            <!-- JS generates grid here -->
+                        </div>
+                    </div>
+
+                    <!-- Plus Sign -->
+                    <div id="plus-sign" class="text-4xl text-slate-500 font-bold z-0 transition-opacity duration-500">
+                        <i class="fa-solid fa-plus"></i>
+                    </div>
+
+                    <!-- Fraction 2 (Horizontal - Blue) -->
+                    <div id="frac2-container" class="flex flex-col items-center z-10 transition-transform duration-1000">
+                        <div class="text-xl font-bold mb-2 font-mono text-blue-400" id="frac2-label">1/3</div>
+                        <div id="frac2-box" class="fraction-box blend-multiply shadow-[0_0_15px_rgba(59,130,246,0.3)]">
+                            <!-- JS generates grid here -->
+                        </div>
+                    </div>
+
+                    <!-- Result Combine Area (Center) -->
+                    <div id="combine-center" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[150px] h-[150px] border-2 border-dashed border-green-500/50 hidden">
+                        <div class="scanner-line" id="scannerLine"></div>
+                    </div>
+                </div>
+
+                <!-- Action Button 1: SCAN -->
+                <button id="btnScan" onclick="executeScan()" class="mt-8 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition-all border border-blue-400 flex items-center gap-2">
+                    <i class="fa-solid fa-compress text-xl"></i> ซ้อนแผ่นใส (X-Ray Scan)
+                </button>
+            </div>
+
+            <!-- Decoding Area (Input Answer) -->
+            <div id="decodeArea" class="w-full mt-6 bg-slate-800 p-6 rounded-xl border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.1)] hidden flex-col items-center transition-all">
+                <h3 class="text-xl text-green-400 font-bold mb-2"><i class="fa-solid fa-unlock-keyhole mr-2"></i> ถอดรหัสความจริง</h3>
+                <p class="text-slate-300 text-sm mb-4 text-center">ดูที่ช่องสี่เหลี่ยมด้านบนที่ซ้อนทับกันแล้วตอบคำถามเพื่อหาความจริง!</p>
+                
+                <div class="flex items-center gap-6 bg-slate-900 p-4 rounded-lg">
+                    <div class="flex flex-col items-center gap-2">
+                        <label class="text-xs text-slate-400">ชิ้นส่วนที่มีสีรวมทั้งหมด (เศษ)</label>
+                        <input type="number" id="inputNum" class="frac-input" min="1" autocomplete="off">
+                    </div>
+                    <div class="w-10 h-1 bg-slate-600 mt-6 rounded-full"></div>
+                    <div class="flex flex-col items-center gap-2">
+                        <label class="text-xs text-slate-400">จำนวนช่องทั้งหมด (ส่วนร่วม)</label>
+                        <input type="number" id="inputDen" class="frac-input neon-border" min="1" autocomplete="off" placeholder="?">
+                    </div>
+                </div>
+
+                <button id="btnSubmit" onclick="checkAnswer()" class="mt-6 px-8 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-all shadow-lg transform hover:scale-105 active:scale-95 w-full md:w-auto">
+                    <i class="fa-solid fa-check-circle mr-2"></i> ยืนยันรหัส
+                </button>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Custom Message Box (Replaces alert) -->
+    <div id="msgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] hidden flex items-center justify-center p-4">
+        <div id="msgBox" class="bg-slate-800 border-2 rounded-2xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl transform scale-95 transition-transform">
+            <div id="msgIcon" class="text-5xl mb-4"></div>
+            <h3 id="msgTitle" class="text-2xl font-bold mb-2"></h3>
+            <p id="msgText" class="text-slate-300 mb-6"></p>
+            <button id="msgBtn" onclick="closeMessage()" class="px-6 py-2 rounded-lg font-bold w-full transition-all text-white"></button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Data & State ---
+        const levels = [
+            { n1: 1, d1: 2, n2: 1, d2: 3, fakeNum: 2, fakeDen: 5 },  // 1/2 + 1/3 (ans: 5/6)
+            { n1: 1, d1: 4, n2: 1, d2: 2, fakeNum: 2, fakeDen: 6 },  // 1/4 + 1/2 (ans: 6/8 -> visual creates 8 grid)
+            { n1: 2, d1: 3, n2: 1, d2: 4, fakeNum: 3, fakeDen: 7 },  // 2/3 + 1/4 (ans: 11/12)
+            { n1: 1, d1: 3, n2: 2, d2: 5, fakeNum: 3, fakeDen: 8 },  // 1/3 + 2/5 (ans: 11/15)
+            { n1: 3, d1: 4, n2: 1, d2: 3, fakeNum: 4, fakeDen: 7 }   // 3/4 + 1/3 (ans: 13/12)
+        ];
+
+        let currentLevel = 0;
+        let score = 0;
+        let isScanned = false;
+        
+        // Element References
+        const els = {
+            briefing: document.getElementById('briefingScreen'),
+            game: document.getElementById('gameScreen'),
+            levelDisp: document.getElementById('levelDisplay'),
+            scoreDisp: document.getElementById('scoreDisplay'),
+            hackerEq: document.getElementById('hackerEquation'),
+            realEq: document.getElementById('realEquation'),
+            f1Box: document.getElementById('frac1-box'),
+            f2Box: document.getElementById('frac2-box'),
+            f1Label: document.getElementById('frac1-label'),
+            f2Label: document.getElementById('frac2-label'),
+            f1Cont: document.getElementById('frac1-container'),
+            f2Cont: document.getElementById('frac2-container'),
+            plusSign: document.getElementById('plus-sign'),
+            btnScan: document.getElementById('btnScan'),
+            decodeArea: document.getElementById('decodeArea'),
+            inpNum: document.getElementById('inputNum'),
+            inpDen: document.getElementById('inputDen'),
+            centerZone: document.getElementById('combine-center'),
+            scannerLine: document.getElementById('scannerLine'),
+            // Modal
+            modal: document.getElementById('msgModal'),
+            msgBox: document.getElementById('msgBox'),
+            msgIcon: document.getElementById('msgIcon'),
+            msgTitle: document.getElementById('msgTitle'),
+            msgText: document.getElementById('msgText'),
+            msgBtn: document.getElementById('msgBtn')
+        };
+
+        // --- Core Functions ---
+
+        function startGame() {
+            els.briefing.classList.add('hidden');
+            els.game.classList.remove('hidden');
+            els.game.classList.add('flex');
+            currentLevel = 0;
+            score = 0;
+            updateScore();
+            loadLevel();
+        }
+
+        function buildFractionGrid(numerator, denominator, isVertical, colorClass) {
+            const layer = document.createElement('div');
+            layer.className = 'fraction-layer';
+            
+            if (isVertical) {
+                layer.style.gridTemplateColumns = `repeat(${denominator}, 1fr)`;
+                layer.style.gridTemplateRows = '1fr';
+            } else {
+                layer.style.gridTemplateColumns = '1fr';
+                layer.style.gridTemplateRows = `repeat(${denominator}, 1fr)`;
+            }
+
+            for (let i = 0; i < denominator; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'grid-cell';
+                if (i < numerator) {
+                    cell.classList.add(colorClass);
+                }
+                layer.appendChild(cell);
+            }
+            return layer;
+        }
+
+        function loadLevel() {
+            if (currentLevel >= levels.length) {
+                showVictory();
+                return;
+            }
+
+            const lv = levels[currentLevel];
+            isScanned = false;
+            
+            // Reset UI
+            els.levelDisp.innerText = `ภารกิจที่ ${currentLevel + 1}/${levels.length}`;
+            els.decodeArea.classList.add('hidden');
+            els.btnScan.classList.remove('hidden');
+            els.inpNum.value = '';
+            els.inpDen.value = '';
+            
+            // Reset Positions
+            els.f1Cont.style.transform = 'translateX(0)';
+            els.f2Cont.style.transform = 'translateX(0)';
+            els.plusSign.style.opacity = '1';
+            els.centerZone.classList.add('hidden');
+            els.scannerLine.style.display = 'none';
+
+            // Set Text
+            els.hackerEq.innerHTML = `<span class="text-red-500">${lv.n1}/${lv.d1} + ${lv.n2}/${lv.d2} = ${lv.fakeNum}/${lv.fakeDen}</span>`;
+            
+            // Note: In real life, kids write fractions vertically. We simulate it inline here for layout simplicity, but use HTML for vertical look.
+            els.realEq.innerHTML = `
+                <div class="flex flex-col items-center"><span class="border-b-2 border-white px-1">${lv.n1}</span><span>${lv.d1}</span></div>
+                <span class="text-green-500">+</span>
+                <div class="flex flex-col items-center"><span class="border-b-2 border-white px-1">${lv.n2}</span><span>${lv.d2}</span></div>
+                <span class="text-green-500">=</span>
+                <div class="flex flex-col items-center text-slate-500"><span class="border-b-2 border-slate-500 px-2">?</span><span>?</span></div>
+            `;
+
+            els.f1Label.innerText = `${lv.n1}/${lv.d1}`;
+            els.f2Label.innerText = `${lv.n2}/${lv.d2}`;
+
+            // Draw Grids
+            els.f1Box.innerHTML = '';
+            els.f2Box.innerHTML = '';
+            
+            // Fraction 1 (Red, Vertical)
+            els.f1Box.appendChild(buildFractionGrid(lv.n1, lv.d1, true, 'fill-red'));
+            
+            // Fraction 2 (Blue, Horizontal)
+            els.f2Box.appendChild(buildFractionGrid(lv.n2, lv.d2, false, 'fill-blue'));
+        }
+
+        function executeScan() {
+            if (isScanned) return;
+            isScanned = true;
+            
+            els.btnScan.classList.add('hidden');
+            els.plusSign.style.opacity = '0';
+            els.centerZone.classList.remove('hidden');
+            
+            // Calculate distance to move to center.
+            // Responsive design makes exact pixel calculation tricky without bounds checking, 
+            // but since parent is flex-center with gaps, we can approximate moving towards center.
+            
+            // For a robust single-file implementation, we use simple CSS transforms 
+            // relative to their flex positions.
+            const containerWidth = document.getElementById('scannerArea').offsetWidth;
+            let moveDist = (containerWidth / 2) - 75; // 75 is half of fraction-box width (150/2)
+            
+            if(window.innerWidth <= 640) {
+                moveDist = (containerWidth / 2) - 50; // for mobile 100px width
+            }
+
+            els.f1Cont.style.transform = `translateX(${moveDist}px)`;
+            els.f2Cont.style.transform = `translateX(-${moveDist}px)`;
+
+            setTimeout(() => {
+                els.scannerLine.style.display = 'block';
+                setTimeout(() => {
+                    els.decodeArea.classList.remove('hidden');
+                    els.decodeArea.classList.add('flex', 'msg-enter');
+                    els.inpDen.focus(); // Guide user to look at the denominator first
+                }, 1000);
+            }, 1000);
+        }
+
+        function checkAnswer() {
+            const lv = levels[currentLevel];
+            
+            // Calculate correct answers based on the VISUAL OVERLAP (d1 * d2)
+            const visualDen = lv.d1 * lv.d2;
+            
+            // Visual numerator: (n1 * d2) + (n2 * d1)
+            // Example 1/2 + 1/3: 
+            // 1/2 becomes 3/6 (3 red). 1/3 becomes 2/6 (2 blue). Total colored = 5.
+            const visualNum = (lv.n1 * lv.d2) + (lv.n2 * lv.d1);
+
+            const userNum = parseInt(els.inpNum.value);
+            const userDen = parseInt(els.inpDen.value);
+
+            if (isNaN(userNum) || isNaN(userDen)) {
+                showMessage('warning', 'เตือนจากศูนย์บัญชาการ', 'กรุณาระบุรหัสตัวเลขให้ครบทั้งเศษและส่วน!', 'รับทราบ', 'bg-yellow-500');
+                return;
+            }
+
+            if (userDen === visualDen && userNum === visualNum) {
+                // Correct!
+                score += 100;
+                updateScore();
+                
+                showMessage('success', 'ถอดรหัสสำเร็จ!', `
+                    ยอดเยี่ยม! คุณเห็นแล้วใช่ไหมว่าตารางถูกแบ่งออกเป็น <b>${visualDen} ช่อง</b> เท่าๆกัน<br>
+                    และมีชิ้นส่วนที่มีสีทั้งหมด <b>${visualNum} ชิ้น</b><br>
+                    แฮกเกอร์หลอกเราไม่ได้อีกต่อไป!
+                `, 'ภารกิจต่อไป', 'bg-green-600', () => {
+                    currentLevel++;
+                    loadLevel();
+                });
+            } else if (userDen !== visualDen) {
+                // Wrong Denominator - Guide them back to the physical concept
+                showMessage('error', 'สแกนผิดพลาด!', `
+                    ลองดูที่ภาพแผ่นใสที่ซ้อนทับกันดีๆ<br>
+                    ตอนนี้ช่องตารางทั้งหมดถูกแบ่งออกเป็นกี่ช่อง? (ให้นับช่องทั้งหมด)<br>
+                    มันไม่ใช่ ${lv.fakeDen} อย่างที่แฮกเกอร์บอกใช่ไหม?
+                `, 'ลองใหม่', 'bg-red-600');
+            } else {
+                // Correct Den, Wrong Num
+                showMessage('error', 'เกือบแล้ว!', `
+                    ตัวส่วนถูกต้อง! (แบ่งเป็น ${visualDen} ช่อง)<br>
+                    แต่จำนวนชิ้นที่มีสียังไม่ถูก ลองนับช่องที่มีสีแดง สีน้ำเงิน และสีม่วง(ที่ทับกัน) รวมกันทั้งหมดดูสิ!
+                `, 'ลองใหม่', 'bg-red-600');
+            }
+        }
+
+        function updateScore() {
+            els.scoreDisp.innerText = score;
+        }
+
+        let modalCallback = null;
+        
+        function showMessage(type, title, text, btnText, btnColor, callback = null) {
+            modalCallback = callback;
+            
+            // Configure Icon and border
+            els.msgBox.className = 'bg-slate-800 border-2 rounded-2xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl transform scale-100 transition-transform msg-enter';
+            
+            if (type === 'success') {
+                els.msgIcon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+                els.msgBox.classList.add('border-green-500');
+            } else if (type === 'error') {
+                els.msgIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-red-500"></i>';
+                els.msgBox.classList.add('border-red-500');
+            } else {
+                els.msgIcon.innerHTML = '<i class="fa-solid fa-bell text-yellow-500"></i>';
+                els.msgBox.classList.add('border-yellow-500');
+            }
+
+            els.msgTitle.innerHTML = title;
+            els.msgText.innerHTML = text;
+            
+            els.msgBtn.innerText = btnText;
+            els.msgBtn.className = `px-6 py-2 rounded-lg font-bold w-full transition-all text-white hover:opacity-90 ${btnColor}`;
+            
+            els.modal.classList.remove('hidden');
+        }
+
+        function closeMessage() {
+            els.modal.classList.add('hidden');
+            els.msgBox.classList.remove('border-green-500', 'border-red-500', 'border-yellow-500');
+            if (modalCallback) {
+                modalCallback();
+                modalCallback = null;
+            }
+        }
+
+        function showVictory() {
+            els.game.innerHTML = `
+                <div class="w-full bg-slate-800/80 p-10 rounded-2xl border border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.3)] text-center msg-enter flex flex-col items-center">
+                    <i class="fa-solid fa-trophy text-7xl text-yellow-400 mb-6 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]"></i>
+                    <h2 class="text-4xl font-bold text-white mb-2 neon-text">ภารกิจสำเร็จ!</h2>
+                    <p class="text-slate-300 mb-6 text-xl">คุณคือยอดสายลับ ป.5 ผู้พิชิตความเข้าใจเรื่องเศษส่วน!</p>
+                    <div class="bg-black/50 px-8 py-4 rounded-xl border border-slate-700 mb-8 inline-block">
+                        <p class="text-sm text-slate-400 mb-1">คะแนนรวมของคุณ</p>
+                        <p class="text-5xl font-mono font-bold text-green-400">${score}</p>
+                    </div>
+                    <button onclick="location.reload()" class="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg text-lg transition-all shadow-lg">
+                        <i class="fa-solid fa-rotate-right mr-2"></i> เล่นอีกครั้ง
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
